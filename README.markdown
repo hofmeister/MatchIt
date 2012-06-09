@@ -1,7 +1,7 @@
 This library wraps JAVA Pattern's in an Expression class that is able to use sub expressions, function expressions and named groups.
 
-Syntax:
- 
+#### Syntax:
+```
 ${subExpressionId}         - Allows the reuse of common expressions like numbers, dates etc. These sub expressions must 
                              first be registered within an expression context
  
@@ -10,9 +10,9 @@ ${functionId(args...)}     - Allows the use of special ExpressionFunction instan
                              context. 
  
 (capital_letters:[A-Z])    - Named groups within your regular expressions.
+```
 
-
-Example:
+#### Example:
 ```java
 //Initialize an expression context.
 ExpressionContext ctxt = new ExpressionContext(); 
