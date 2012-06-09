@@ -1,5 +1,7 @@
 This library wraps JAVA Pattern's in an Expression class that is able to use sub expressions, function expressions and named groups.
 
+It handles infinite nesting of everything.
+
 #### Syntax:
 ```
 ${subExpressionId}         - Allows the reuse of common expressions like numbers, dates etc. These sub expressions must 
