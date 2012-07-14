@@ -1,7 +1,5 @@
 package com.vonhof.matchit;
 
-import com.vonhof.matchit.Expression.ExpressionMatch;
-import com.vonhof.matchit.Expression.ExpressionMatcher;
 import junit.framework.TestCase;
 
 /**
@@ -14,16 +12,6 @@ public class ExpressionContextTest extends TestCase {
         super(testName);
     }
     
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
-    }
-    
-    @Override
-    protected void tearDown() throws Exception {
-        super.tearDown();
-    }
-
     public void test_can_compile_subexpressions() {
         ExpressionContext ctxt = new ExpressionContext();
         ctxt.add("letters","[A-Z]+");

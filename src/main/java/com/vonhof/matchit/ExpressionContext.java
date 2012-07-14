@@ -49,6 +49,5 @@ public class ExpressionContext {
     
     public Expression compile(String expression) {
         return new Expression(this,expression);
-        
     }
 }

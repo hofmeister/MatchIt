@@ -27,46 +27,46 @@ import java.util.regex.Pattern;
  * 
  * @author Henrik Hofmeister <@vonhofdk>
  */
-public final class Expression {
+public class Expression {
 
-    private final Pattern EXPRESSION = Pattern.compile("(?uis)\\$\\{([A-Z][A-Z0-9_]*)(?:\\(([^\\)]*)\\))?\\}");
-    private final Pattern GROUP_START = Pattern.compile("(?uis)(?<!\\\\)\\((?:\\?\\<([A-Z][A-Z0-9_]+)\\>|(?!\\?))");
+    private static final Pattern EXPRESSION = Pattern.compile("(?uis)\\$\\{([A-Z][A-Z0-9_]*)(?:\\(([^\\)]*)\\))?\\}");
+    private static final Pattern GROUP_START = Pattern.compile("(?uis)(?<!\\\\)\\((?:\\?\\<([A-Z][A-Z0-9_]+)\\>|(?!\\?))");
     
     /**
      * The original string expression that this expression was created from.
      */
-    private final String expression;
+    protected final String expression;
     
     /**
      * Maps groups to group names.
      */
-    private final Map<Integer,String> groupNames = new LinkedHashMap<Integer,String>();
+    protected final Map<Integer,String> groupNames = new LinkedHashMap<Integer,String>();
     
     /**
      * Map of all sub expressions in the expression (recursivly).
      */
-    private final Map<String,Set<Expression>> subExpressions = new LinkedHashMap<String, Set<Expression>>();
+    protected final Map<String,Set<Expression>> subExpressions = new LinkedHashMap<String, Set<Expression>>();
     
     /**
      * Maps group numbers to sub expression ids.
      */
-    private final Map<Integer,String> groupSubExpression = new LinkedHashMap<Integer, String>();
+    protected final Map<Integer,String> groupSubExpression = new LinkedHashMap<Integer, String>();
     
     /**
      * The expression context - contains all other expressions and functions 
      * that should be available to this expression.
      */
-    private final ExpressionContext ctxt;
+    protected final ExpressionContext ctxt;
     
     /**
      * The total amount of capturing groups found in this expression and its sub expressions.
      */
-    private int groupCount = 0;
+    protected int groupCount = 0;
     
     /**
      * The compiled pattern result from this expression.
      */
-    private Pattern compiled;
+    protected Pattern compiled;
     
 
     protected Expression(ExpressionContext ctxt,String expression) {
@@ -78,14 +78,28 @@ public final class Expression {
      * Compile the expression. Must be done before using it (which is done automatically *when* using it)
      * @return 
      */
-    protected Expression compile() {
+    private Expression compile() {
         if (compiled == null) {
-            String expr = compileSubExpressions(expression);
-            expr = prepareNamedGroups(expr);
+            try {
+                String expr = compileSubExpressions(expression);
             
-            compiled = Pattern.compile("(?uis)"+expr);
+                expr = prepareNamedGroups(expr);
+            
+                compiled = Pattern.compile("(?uis)"+expr);
+            } catch(StackOverflowError ex) {
+                //System.err.print("Failed to compile: "+expression);
+            }
         }
         return this;
+    }
+    
+    /**
+     * Return context-less expression (only able to use named groups)
+     * @param text
+     * @return 
+     */
+    public static Expression compile(String text) {
+        return new Expression(new ExpressionContext(),text);
     }
 
     /**
@@ -137,7 +151,6 @@ public final class Expression {
         while (matcher.find()) {
             sb.append(textExpression.substring(offset, matcher.start()));
             String id = matcher.group(1);
-
             String args = matcher.group(2);
             if (args != null) {
                 ExpressionFunction function = ctxt.getFunction(id);
@@ -263,241 +276,5 @@ public final class Expression {
         int hash = 7;
         hash = 23 * hash + (this.expression != null ? this.expression.hashCode() : 0);
         return hash;
-    }
-    
-    
-    
-    
-    public static class ExpressionMatch {
-        protected final Expression expression;
-        protected String[] groups;
-        protected String[] groupNames;
-        protected String[] subExpressionIds;
-        protected int[] groupStart;
-        protected int[] groupEnd;
-
-        public ExpressionMatch(Expression baseExpression) {
-            this.expression = baseExpression;
-        }
-        
-        public int start() {
-            return start(0);
-        }
-        
-        public int start(int group) {
-            return groupStart[group];
-        }
-        public int start(String group) {
-            int i = groupIndex(group);
-            return start(i);
-        }
-        
-        
-        public int end() {
-            return end(0);
-        }
-        
-        public int end(int group) {
-            return groupEnd[group];
-        }
-        
-        public int end(String group) {
-            int i = groupIndex(group);
-            return end(i);
-        }
-        
-        public String group(String group) {
-            int i = groupIndex(group);
-            if (i < 0)
-                return null;
-            return group(i);
-        }
-        
-        public String group() {
-            return group(0);
-        }
-        
-        public String group(int group) {
-            if (group < 0 || group >= groups.length)
-                return null;
-            return groups[group];
-        }
-        
-        public ExpressionMatch subMatch(String expressionId) {
-            int offset = subExpressionIndex(expressionId);
-            //If not found of group where its located is empty - return null
-            if (offset < 0 || group(offset) == null)
-                return null;
-            
-            Set<Expression> expressions = expression.subExpressions.get(expressionId);
-            
-            //Find the sub expression that did match something (they are placed in a (<expr1>|<expr2>) )
-            Expression subExpression = null;
-            
-            if (expressions.size() > 1) {
-                offset++;
-                for(Expression expr:expressions) {
-                    if (group(offset) != null) {
-                        subExpression = expr;
-                        break;
-                    }
-                    offset += expr.groupCount;
-                }
-            } else {
-                subExpression = expressions.iterator().next();
-            }
-            //If no match was found - return null
-            if (subExpression == null) return null;
-            
-            ExpressionMatch out = new ExpressionMatch(subExpression);
-            
-            //Copy the values from this match into the sub match
-            int size = subExpression.groupCount;
-            int limit = offset+size;
-            out.groups = new String[size];
-            out.groupNames = new String[size];
-            out.subExpressionIds = new String[size];
-            out.groupStart = new int[size];
-            out.groupEnd = new int[size];
-            
-            for(int i = offset; i < limit;i++) {
-                out.groups[i-offset] = group(i);
-                out.groupStart[i-offset] = start(i);
-                out.groupEnd[i-offset] = end(i);
-                out.groupNames[i-offset] = groupName(i);
-                out.subExpressionIds[i-offset] = subExpression.groupSubExpression.get(i-offset);
-            }
-            
-            return out;
-        }
-        
-        public int groupCount() {
-            return groups.length;
-        }
-        
-        /**
-         * Get a map of all group names and group indices - along with the value they represent.
-         * @return 
-         */
-        public StringIntMap<String> groups() {
-            return groups(0, groupCount());
-        }
-        
-        /**
-         * Get a map of all group names and group indices - along with the value they represent - between start and 
-         * limit
-         * @param start
-         * @param limit
-         * @return 
-         */
-        public StringIntMap<String> groups(int start,int limit) {
-            StringIntMap<String> out = new StringIntMap<String>();
-            
-            for(int i = start; i < limit;i++) {
-                String key = groupName(i);
-                if (key != null) {
-                    out.put(key,group(i));
-                }
-                out.put(i-start,group(i));
-            }
-            
-            return out;
-        }
-        
-        public String subExpressionId(int i) {
-            return subExpressionIds[i];
-        }
-
-        public String[] subExpressionIds() {
-            return subExpressionIds;
-        }
-        
-        public int subExpressionCount() {
-            return arrayCount(subExpressionIds);
-        }
-        
-        public int subExpressionIndex(String group) {
-            return arrayLookup(group, subExpressionIds);
-        }
-        
-        public int groupIndex(String group) {
-            return arrayLookup(group, groupNames);
-        }
-        
-        public String groupName(int i) {
-            return groupNames[i];
-        }
-        
-        public int namedGroupCount() {
-            return arrayCount(groupNames);
-        }
-        
-        private int arrayCount(String[] array) {
-            int out = 0;
-            for(int i = 0; i < array.length;i++) {
-                if (array[i] != null)
-                    out++;
-                    
-            }
-            return out;
-        }
-        
-        private int arrayLookup(String key,String[] array) {
-            int first = -1;
-            for(int i = 0; i < array.length;i++) {
-                if (array[i] != null 
-                        && array[i].equals(key)) {
-                    if (first == -1)
-                        first = 1;
-                    if (array[i] == null)
-                        continue;
-                    return i;
-                }
-                    
-            }
-            return first;
-        }
-
-        public Expression expression() {
-            return expression;
-        }
-    }
-    
-    public static final class ExpressionMatcher extends ExpressionMatch {
-        private final Matcher m;
-        
-        public ExpressionMatcher(Matcher matcher,Expression baseExpression) {
-            super(baseExpression);
-            this.m = matcher;
-        }    
-        
-        public boolean find() {
-            if (m.find()) {
-                readMatch(m,expression,expression.groupCount);
-                return true;
-            }
-            return false;
-        }
-        
-        protected void readMatch(Matcher m,Expression expr,int limit) {
-            int size = limit;
-            groups = new String[size];
-            groupNames = new String[size];
-            subExpressionIds = new String[size];
-            groupStart = new int[size];
-            groupEnd = new int[size];
-
-            for(int i = 0; i < limit;i++) {
-                groups[i] = m.group(i);
-                groupStart[i] = m.start(i);
-                groupEnd[i] = m.end(i);
-                groupNames[i] = expr.groupNames.get(i);
-                subExpressionIds[i] = expr.groupSubExpression.get(i);
-            }
-        }
-        
-        public boolean find(int offset) {
-            return m.find(offset);
-        }
     }
 }
